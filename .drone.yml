@@ -1,6 +1,6 @@
 pipeline:
   build:
-    image: ${RUST_VERSION}
+    image: ${IMAGE}
     secrets: [ codecov_token ]
     commands:
       - |
@@ -8,13 +8,18 @@ pipeline:
           apt-get update
           apt-get install -y --no-install-recommends musl-tools
           rustup target add x86_64-unknown-linux-musl
+        elif [ "${TARGET}" = "aarch64-unknown-linux-gnu" ]; then
+          apt-get update || true
+          apt-get install -y --no-install-recommends curl ca-certificates gcc libc-dev
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          export PATH=/root/.cargo/bin:$PATH
+          rustup default stable
         fi
       - rustup show
       - cargo build --target ${TARGET}
       - cargo test --target ${TARGET}
       - |
-        if [ "${RUST_VERSION}" = "rustlang/rust:nightly" ] &&
-           [ "${TARGET}" = "x86_64-unknown-linux-gnu" ]; then
+        if [ "${COVERAGE}" = "1" ]; then
           apt-get update
           apt-get install -y --no-install-recommends lcov llvm
           ./util/run-cov.sh
@@ -24,10 +29,26 @@ pipeline:
         fi
 
 matrix:
-  RUST_VERSION:
-    - rust:1.26
-    - rust:latest
-    - rustlang/rust:nightly
-  TARGET:
-    - x86_64-unknown-linux-gnu
-    - x86_64-unknown-linux-musl
+  include:
+    - RUST_VERSION: 1.26
+      IMAGE: rust:1.26
+      TARGET: x86_64-unknown-linux-gnu
+    - RUST_VERSION: 1.26
+      IMAGE: rust:1.26
+      TARGET: x86_64-unknown-linux-musl
+    - RUST_VERSION: stable
+      IMAGE: rust:latest
+      TARGET: x86_64-unknown-linux-gnu
+    - RUST_VERSION: stable
+      IMAGE: rust:latest
+      TARGET: x86_64-unknown-linux-musl
+    - RUST_VERSION: nightly
+      IMAGE: rustlang/rust:nightly
+      TARGET: x86_64-unknown-linux-gnu
+      COVERAGE: 1
+    - RUST_VERSION: nightly
+      IMAGE: rustlang/rust:nightly
+      TARGET: x86_64-unknown-linux-musl
+    - RUST_VERSION: stable
+      IMAGE: multiarch/debian-debootstrap:arm64-jessie
+      TARGET: aarch64-unknown-linux-gnu
